@@ -46,7 +46,7 @@ export async function renderVendedor(nombre, onLogout) {
           </div>
         </div>
 
-        <!-- RESULTADO -->
+        <!-- RESULTADO — solo muestra gramos, sin utilidad ni margen -->
         <div id="v-resultado" style="background:#F3F4F6;border-radius:10px;padding:16px;margin-bottom:14px;text-align:center;color:#9CA3AF;font-size:13px">
           Selecciona un producto e ingresa el monto
         </div>
@@ -57,14 +57,11 @@ export async function renderVendedor(nombre, onLogout) {
         </div>
       </div>
 
-      <!-- TABLA VENTAS HOY -->
+      <!-- TABLA VENTAS HOY — sin columnas de utilidad -->
       <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <h2 style="font-size:15px;font-weight:600;color:#1F2937">Ventas de hoy</h2>
-          <div style="display:flex;gap:8px">
-            <span id="v-total-hoy" style="font-size:13px;padding:4px 12px;background:#E1F5EE;color:#085041;border-radius:10px;font-weight:600">$0.00</span>
-            <span id="v-util-hoy" style="font-size:13px;padding:4px 12px;background:#F3F4F6;color:#4B5563;border-radius:10px">$0.00 utilidad</span>
-          </div>
+          <span id="v-total-hoy" style="font-size:13px;padding:4px 12px;background:#E1F5EE;color:#085041;border-radius:10px;font-weight:600">$0.00 total</span>
         </div>
         <div id="v-empty" style="text-align:center;padding:32px;color:#9CA3AF;font-size:13px">Sin ventas registradas hoy</div>
         <table id="v-tabla" class="hidden" style="width:100%;border-collapse:collapse;font-size:13px">
@@ -72,8 +69,6 @@ export async function renderVendedor(nombre, onLogout) {
             <th style="text-align:left;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Producto</th>
             <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Monto</th>
             <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Gramos</th>
-            <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">$/gr</th>
-            <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Utilidad</th>
             <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Turno</th>
             <th></th>
           </tr></thead>
@@ -100,31 +95,24 @@ export async function renderVendedor(nombre, onLogout) {
     const res   = el.querySelector('#v-resultado')
 
     if (!opt || !opt.value || isNaN(monto) || monto <= 0) {
-      res.style.background = '#F3F4F6'; res.style.color = '#9CA3AF'
+      res.style.background = '#F3F4F6'
+      res.style.color = '#9CA3AF'
       res.innerHTML = 'Selecciona un producto e ingresa el monto'
       return
     }
-    const pLb   = parseFloat(opt.dataset.precio)
-    const cLb   = parseFloat(opt.dataset.costo)
-    const pGr   = pLb / LB
-    const cGr   = cLb / LB
-    const gramos = monto / pGr
-    const util   = (pGr - cGr) * gramos
-    const margen = pGr > 0 ? (pGr - cGr) / pGr * 100 : 0
 
-    res.style.background = '#E1F5EE'; res.style.color = '#085041'
+    const pLb   = parseFloat(opt.dataset.precio)
+    const pGr   = pLb / LB
+    const gramos = monto / pGr
+
+    // Solo muestra producto, monto y gramos — sin utilidad ni margen
+    res.style.background = '#E1F5EE'
+    res.style.color = '#085041'
     res.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="text-align:left">
-          <div style="font-size:11px;opacity:.7;margin-bottom:3px">${opt.textContent} — $${monto.toFixed(2)}</div>
-          <div style="font-size:36px;font-weight:700;line-height:1;color:#0F6E56">${gramos.toFixed(1)} g</div>
-          <div style="font-size:12px;margin-top:4px;opacity:.8">${(gramos/LB).toFixed(3)} lb &nbsp;·&nbsp; ${(gramos/1000).toFixed(3)} kg</div>
-        </div>
-        <div style="text-align:right;font-size:13px;line-height:2">
-          <div>Precio/gr: <strong>$${pGr.toFixed(4)}</strong></div>
-          <div>Utilidad: <strong>$${util.toFixed(2)}</strong></div>
-          <div>Margen: <strong>${margen.toFixed(1)}%</strong></div>
-        </div>
+      <div style="text-align:center">
+        <div style="font-size:12px;opacity:.7;margin-bottom:4px">${opt.textContent} — $${monto.toFixed(2)}</div>
+        <div style="font-size:42px;font-weight:700;line-height:1;color:#0F6E56">${gramos.toFixed(1)} g</div>
+        <div style="font-size:13px;margin-top:6px;opacity:.8">${(gramos/LB).toFixed(3)} lb &nbsp;·&nbsp; ${(gramos/1000).toFixed(3)} kg</div>
       </div>`
   }
 
@@ -134,10 +122,8 @@ export async function renderVendedor(nombre, onLogout) {
     const tabla = el.querySelector('#v-tabla')
     const empty = el.querySelector('#v-empty')
     const total = hoy.reduce((s, v) => s + Number(v.monto), 0)
-    const util  = hoy.reduce((s, v) => s + Number(v.utilidad), 0)
 
-    el.querySelector('#v-total-hoy').textContent = `$${total.toFixed(2)}`
-    el.querySelector('#v-util-hoy').textContent  = `$${util.toFixed(2)} utilidad`
+    el.querySelector('#v-total-hoy').textContent = `$${total.toFixed(2)} total`
 
     if (!hoy.length) { tabla.classList.add('hidden'); empty.style.display = 'block'; return }
     tabla.classList.remove('hidden'); empty.style.display = 'none'
@@ -147,8 +133,6 @@ export async function renderVendedor(nombre, onLogout) {
         <td style="padding:9px 6px;font-weight:500">${v.producto_nombre}</td>
         <td style="padding:9px 6px;text-align:right">$${Number(v.monto).toFixed(2)}</td>
         <td style="padding:9px 6px;text-align:right;color:#0F6E56;font-weight:600">${Number(v.gramos).toFixed(1)} g</td>
-        <td style="padding:9px 6px;text-align:right;color:#9CA3AF;font-size:12px">$${Number(v.precio_gr).toFixed(4)}</td>
-        <td style="padding:9px 6px;text-align:right;color:#0F6E56">$${Number(v.utilidad).toFixed(2)}</td>
         <td style="padding:9px 6px;text-align:right;font-size:12px;color:#9CA3AF">${v.turno}</td>
         <td style="padding:9px 6px;text-align:right">
           <button onclick="window._delVenta(${v.id})"
@@ -163,8 +147,9 @@ export async function renderVendedor(nombre, onLogout) {
     sel.innerHTML = '<option value="">— seleccionar —</option>'
     productos.forEach(p => {
       const o = document.createElement('option')
-      o.value = p.id; o.textContent = p.nombre
-      o.dataset.precio = p.precio_lb; o.dataset.costo = p.costo_lb
+      o.value = p.id
+      o.textContent = p.nombre
+      o.dataset.precio = p.precio_lb
       sel.appendChild(o)
     })
     if (val) sel.value = val
@@ -190,27 +175,35 @@ export async function renderVendedor(nombre, onLogout) {
     if (!opt || !opt.value) { toast('Selecciona un producto', true); return }
     if (isNaN(monto) || monto <= 0) { toast('Ingresa un monto válido', true); return }
 
-    const pLb  = parseFloat(opt.dataset.precio)
-    const cLb  = parseFloat(opt.dataset.costo)
-    const pGr  = pLb / LB
-    const cGr  = cLb / LB
+    const pLb    = parseFloat(opt.dataset.precio)
+    const pGr    = pLb / LB
+    const cGr    = 0   // costo no se muestra al vendedor pero se guarda desde admin
     const gramos = monto / pGr
 
     const btn = el.querySelector('#v-registrar')
     btn.disabled = true; btn.textContent = 'Guardando...'
     try {
+      // Obtener costo actual desde Supabase para guardar la utilidad correcta
+      const prod = productos.find(p => p.id === parseInt(opt.value))
+      const cLb  = prod ? Number(prod.costo_lb) : 0
+      const cGrReal = cLb / LB
+
       const nueva = await insertVenta({
         fecha: today, vendedor: nombre, turno,
         producto_id: parseInt(opt.value),
         producto_nombre: opt.textContent,
-        monto, precio_gr: pGr, costo_gr: cGr,
-        gramos, utilidad: (pGr - cGr) * gramos,
-        margen: pGr > 0 ? (pGr - cGr) / pGr : 0
+        monto,
+        precio_gr: pGr,
+        costo_gr: cGrReal,
+        gramos,
+        utilidad: (pGr - cGrReal) * gramos,
+        margen: pGr > 0 ? (pGr - cGrReal) / pGr : 0
       })
       ventas.unshift(nueva)
       el.querySelector('#v-producto').value = ''
       el.querySelector('#v-monto').value = ''
-      calcGramos(); renderTabla()
+      calcGramos()
+      renderTabla()
       toast('Venta registrada')
     } catch(e) {
       toast('Error al guardar. Revisa tu conexión.', true)
@@ -223,17 +216,20 @@ export async function renderVendedor(nombre, onLogout) {
 
   window._delVenta = async (id) => {
     if (!confirm('¿Eliminar esta venta?')) return
-    try { await deleteVenta(id); ventas = ventas.filter(v => v.id !== id); renderTabla(); toast('Eliminada') }
-    catch(e) { toast('Error al eliminar', true) }
+    try {
+      await deleteVenta(id)
+      ventas = ventas.filter(v => v.id !== id)
+      renderTabla()
+      toast('Eliminada')
+    } catch(e) { toast('Error al eliminar', true) }
   }
 
-  // Realtime: si el admin cambia precios, el vendedor los ve al instante
   subscribeProductos(() => getProductos().then(p => { productos = p; renderProductos() }))
 
-  // Carga inicial
   try {
     [productos, ventas] = await Promise.all([getProductos(), getVentas(today, today)])
-    renderProductos(); renderTabla()
+    renderProductos()
+    renderTabla()
   } catch(e) { toast('Error al cargar datos', true) }
 
   return el
