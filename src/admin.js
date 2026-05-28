@@ -1,4 +1,4 @@
-import { getProductos, updateProducto, getVentas, getGastos, insertGasto, deleteGasto, subscribeVentas, supabase } from './supabase.js'
+import { getProductos, updateProducto, getVentas, getGastos, insertGasto, deleteGasto, deleteVenta, subscribeVentas, supabase } from './supabase.js'
 
 export async function renderAdmin(nombre, onLogout) {
   let productos = [], ventas = [], gastos = []
@@ -158,6 +158,7 @@ export async function renderAdmin(nombre, onLogout) {
               <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Gramos</th>
               <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Utilidad</th>
               <th style="text-align:right;padding:8px 6px;font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Margen</th>
+              <th style="padding:8px 6px"></th>
             </tr></thead>
             <tbody id="a-hist-tbody"></tbody>
           </table>
@@ -268,6 +269,11 @@ export async function renderAdmin(nombre, onLogout) {
         <td style="padding:8px 6px;text-align:right;color:#0F6E56;font-weight:600">${Number(v.gramos).toFixed(1)} g</td>
         <td style="padding:8px 6px;text-align:right;color:#0F6E56">$${Number(v.utilidad).toFixed(2)}</td>
         <td style="padding:8px 6px;text-align:right">${badge(m)}</td>
+        <td style="padding:8px 4px;text-align:right">
+          <button onclick="window._delVentaAdmin(${v.id},'${String(v.producto_nombre).replace(/'/g,"\'")}')"
+            style="padding:3px 8px;background:#FCEBEB;color:#A32D2D;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600"
+            title="Eliminar esta venta">×</button>
+        </td>
       </tr>`
     }).join('')
   }
@@ -443,6 +449,17 @@ export async function renderAdmin(nombre, onLogout) {
     if (!confirm('¿Eliminar este gasto?')) return
     try { await deleteGasto(id); gastos = gastos.filter(g => g.id !== id); renderTodo(); toast('Eliminado') }
     catch(e) { toast('Error al eliminar', true) }
+  }
+
+  // Eliminar venta desde admin
+  window._delVentaAdmin = async (id, nombre) => {
+    if (!confirm(`¿Eliminar la venta de "${nombre}"?\n\nEsta acción no se puede deshacer.`)) return
+    try {
+      await deleteVenta(id)
+      ventas = ventas.filter(v => v.id !== id)
+      renderTodo()
+      toast(`Venta eliminada`)
+    } catch(e) { toast('Error al eliminar la venta', true) }
   }
 
   // Realtime
