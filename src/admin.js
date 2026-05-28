@@ -1,4 +1,4 @@
-import { getProductos, updateProducto, getVentas, getGastos, insertGasto, deleteGasto, subscribeVentas } from './supabase.js'
+import { getProductos, updateProducto, getVentas, getGastos, insertGasto, deleteGasto, subscribeVentas, supabase } from './supabase.js'
 
 export async function renderAdmin(nombre, onLogout) {
   let productos = [], ventas = [], gastos = []
@@ -25,7 +25,7 @@ export async function renderAdmin(nombre, onLogout) {
 
     <div style="max-width:1100px;margin:0 auto;padding:24px;display:grid;gap:20px">
 
-      <!-- FILTRO FECHAS -->
+      <!-- FILTRO -->
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span style="font-size:13px;color:#4B5563;font-weight:500">Período:</span>
         <input id="a-desde" type="date" value="${filtroDesde}" style="padding:7px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
@@ -37,57 +37,88 @@ export async function renderAdmin(nombre, onLogout) {
       <!-- KPIs -->
       <div id="a-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
 
-      <!-- PRECIOS + GASTOS -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-
-        <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <h2 style="font-size:15px;font-weight:600;color:#1F2937">Precios por libra</h2>
+      <!-- PRODUCTOS: PRECIOS + AGREGAR -->
+      <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="font-size:15px;font-weight:600;color:#1F2937">Productos</h2>
+          <div style="display:flex;gap:8px">
             <button id="a-guardar-precios" style="padding:7px 14px;background:#1D9E75;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600">Guardar cambios</button>
+            <button id="a-nuevo-producto" style="padding:7px 14px;background:#1F3864;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600">+ Nuevo producto</button>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 86px 86px 60px;gap:4px;padding-bottom:6px;border-bottom:1px solid #E5E7EB;margin-bottom:4px">
-            <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Producto</span>
-            <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Venta $/lb</span>
-            <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Costo $/lb</span>
-            <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Margen</span>
-          </div>
-          <div id="a-precios-lista" style="max-height:400px;overflow-y:auto"></div>
         </div>
 
-        <div style="display:grid;gap:16px;align-content:start">
-          <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
-            <h2 style="font-size:15px;font-weight:600;color:#1F2937;margin-bottom:14px">Registrar gasto</h2>
-            <div style="display:grid;gap:10px">
-              <div>
-                <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Categoría</label>
-                <select id="g-cat" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
-                  <option>Compra Mercadería</option><option>Arriendo</option><option>Servicios Básicos</option>
-                  <option>Transporte</option><option>Empaque</option><option>Marketing</option>
-                  <option>Sueldos</option><option>Impuestos</option><option>Mantenimiento</option><option>Otros</option>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Descripción</label>
-                <input id="g-desc" type="text" placeholder="Descripción del gasto" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <div>
-                  <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Monto ($)</label>
-                  <input id="g-monto" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
-                </div>
-                <div>
-                  <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Fecha</label>
-                  <input id="g-fecha" type="date" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
-                </div>
-              </div>
-              <button id="g-registrar" style="width:100%;padding:9px;background:#1F3864;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600">Registrar gasto</button>
+        <!-- FORMULARIO NUEVO PRODUCTO (oculto por defecto) -->
+        <div id="a-form-nuevo" style="display:none;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:16px;margin-bottom:16px">
+          <div style="font-size:13px;font-weight:600;color:#065F46;margin-bottom:12px">Agregar nuevo producto</div>
+          <div style="display:grid;grid-template-columns:1fr 120px 120px auto;gap:10px;align-items:end">
+            <div>
+              <label style="font-size:11px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">NOMBRE DEL PRODUCTO</label>
+              <input id="nuevo-nombre" type="text" placeholder="ej: MACADAMIA TOSTADA"
+                style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px;text-transform:uppercase">
+            </div>
+            <div>
+              <label style="font-size:11px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">PRECIO $/LB</label>
+              <input id="nuevo-precio" type="number" min="0" step="0.01" placeholder="0.00"
+                style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">COSTO $/LB</label>
+              <input id="nuevo-costo" type="number" min="0" step="0.01" placeholder="0.00"
+                style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+            </div>
+            <div style="display:flex;gap:6px">
+              <button id="a-confirmar-nuevo" style="padding:8px 14px;background:#1D9E75;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap">Agregar</button>
+              <button id="a-cancelar-nuevo" style="padding:8px 10px;background:#fff;border:1px solid #E5E7EB;border-radius:8px;font-size:13px;color:#4B5563">✕</button>
             </div>
           </div>
-          <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
-            <h2 style="font-size:15px;font-weight:600;color:#1F2937;margin-bottom:12px">Gastos recientes</h2>
-            <div id="a-gastos-lista" style="max-height:220px;overflow-y:auto">
-              <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:13px">Sin gastos registrados</div>
+        </div>
+
+        <!-- TABLA PRODUCTOS -->
+        <div style="display:grid;grid-template-columns:1fr 90px 90px 64px 36px;gap:4px;padding-bottom:6px;border-bottom:1px solid #E5E7EB;margin-bottom:4px">
+          <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Producto</span>
+          <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Venta $/lb</span>
+          <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Costo $/lb</span>
+          <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Margen</span>
+          <span></span>
+        </div>
+        <div id="a-precios-lista" style="max-height:420px;overflow-y:auto"></div>
+      </div>
+
+      <!-- GASTOS -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
+          <h2 style="font-size:15px;font-weight:600;color:#1F2937;margin-bottom:14px">Registrar gasto</h2>
+          <div style="display:grid;gap:10px">
+            <div>
+              <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Categoría</label>
+              <select id="g-cat" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+                <option>Compra Mercadería</option><option>Arriendo</option><option>Servicios Básicos</option>
+                <option>Transporte</option><option>Empaque</option><option>Marketing</option>
+                <option>Sueldos</option><option>Impuestos</option><option>Mantenimiento</option><option>Otros</option>
+              </select>
             </div>
+            <div>
+              <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Descripción</label>
+              <input id="g-desc" type="text" placeholder="Descripción del gasto" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Monto ($)</label>
+                <input id="g-monto" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:4px">Fecha</label>
+                <input id="g-fecha" type="date" style="width:100%;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+              </div>
+            </div>
+            <button id="g-registrar" style="width:100%;padding:9px;background:#1F3864;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600">Registrar gasto</button>
+          </div>
+        </div>
+
+        <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
+          <h2 style="font-size:15px;font-weight:600;color:#1F2937;margin-bottom:12px">Gastos recientes</h2>
+          <div id="a-gastos-lista" style="max-height:280px;overflow-y:auto">
+            <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:13px">Sin gastos registrados</div>
           </div>
         </div>
       </div>
@@ -165,10 +196,10 @@ export async function renderAdmin(nombre, onLogout) {
     const mb   = ing > 0 ? (util / ing * 100).toFixed(1) : 0
     const mn   = ing > 0 ? (neta / ing * 100).toFixed(1) : 0
     el.querySelector('#a-kpis').innerHTML =
-      kpiCard('Ingresos totales',   `$${ing.toFixed(2)}`,  `${ventas.length} transacciones`) +
-      kpiCard('Utilidad bruta',     `$${util.toFixed(2)}`, `margen ${mb}%`, '#0F6E56') +
-      kpiCard('Gastos operativos',  `$${gast.toFixed(2)}`, `${gastos.length} registros`, '#A32D2D') +
-      kpiCard('Utilidad neta',      `$${neta.toFixed(2)}`, `margen neto ${mn}%`, neta >= 0 ? '#0F6E56' : '#A32D2D')
+      kpiCard('Ingresos totales',  `$${ing.toFixed(2)}`,  `${ventas.length} transacciones`) +
+      kpiCard('Utilidad bruta',    `$${util.toFixed(2)}`, `margen ${mb}%`, '#0F6E56') +
+      kpiCard('Gastos operativos', `$${gast.toFixed(2)}`, `${gastos.length} registros`, '#A32D2D') +
+      kpiCard('Utilidad neta',     `$${neta.toFixed(2)}`, `margen neto ${mn}%`, neta >= 0 ? '#0F6E56' : '#A32D2D')
   }
 
   function renderPrecios() {
@@ -177,7 +208,7 @@ export async function renderAdmin(nombre, onLogout) {
       const m  = p.precio_lb > 0 ? ((p.precio_lb - p.costo_lb) / p.precio_lb * 100) : 0
       const bg = m >= 25 ? '#E1F5EE' : m >= 15 ? '#FAEEDA' : '#FCEBEB'
       const tc = m >= 25 ? '#085041' : m >= 15 ? '#633806' : '#A32D2D'
-      return `<div style="display:grid;grid-template-columns:1fr 86px 86px 60px;gap:4px;align-items:center;padding:5px 0;border-bottom:1px solid #F3F4F6">
+      return `<div style="display:grid;grid-template-columns:1fr 90px 90px 64px 36px;gap:4px;align-items:center;padding:5px 0;border-bottom:1px solid #F3F4F6">
         <span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.nombre}">${p.nombre}</span>
         <input type="number" step="0.01" min="0" value="${Number(p.precio_lb).toFixed(2)}"
           data-id="${p.id}" data-tipo="precio" oninput="window._precioChange(this)"
@@ -186,6 +217,8 @@ export async function renderAdmin(nombre, onLogout) {
           data-id="${p.id}" data-tipo="costo" oninput="window._precioChange(this)"
           style="padding:4px 6px;border:1px solid #E5E7EB;border-radius:6px;font-size:12px;text-align:right;width:100%">
         <span id="margen-${p.id}" style="font-size:11px;padding:2px 5px;border-radius:6px;background:${bg};color:${tc};font-weight:500;text-align:center">${m.toFixed(1)}%</span>
+        <button onclick="window._borrarProducto(${p.id},'${p.nombre.replace(/'/g, "\\'")}')"
+          style="padding:3px 7px;background:#FCEBEB;color:#A32D2D;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600" title="Eliminar producto">×</button>
       </div>`
     }).join('')
   }
@@ -261,7 +294,6 @@ export async function renderAdmin(nombre, onLogout) {
 
   function renderTodo() { renderKPIs(); renderPorProducto(); renderHistorial(); renderGastos() }
 
-  // ── Carga ────────────────────────────────────────────────────────────────────
   async function cargar() {
     try {
       ;[productos, ventas, gastos] = await Promise.all([
@@ -282,6 +314,59 @@ export async function renderAdmin(nombre, onLogout) {
 
   el.querySelector('#a-logout').addEventListener('click', onLogout)
 
+  // Mostrar/ocultar formulario nuevo producto
+  el.querySelector('#a-nuevo-producto').addEventListener('click', () => {
+    const form = el.querySelector('#a-form-nuevo')
+    form.style.display = form.style.display === 'none' ? 'block' : 'none'
+    if (form.style.display === 'block') el.querySelector('#nuevo-nombre').focus()
+  })
+
+  el.querySelector('#a-cancelar-nuevo').addEventListener('click', () => {
+    el.querySelector('#a-form-nuevo').style.display = 'none'
+    el.querySelector('#nuevo-nombre').value = ''
+    el.querySelector('#nuevo-precio').value = ''
+    el.querySelector('#nuevo-costo').value = ''
+  })
+
+  // Agregar nuevo producto
+  el.querySelector('#a-confirmar-nuevo').addEventListener('click', async () => {
+    const nombre = el.querySelector('#nuevo-nombre').value.trim().toUpperCase()
+    const precio = parseFloat(el.querySelector('#nuevo-precio').value)
+    const costo  = parseFloat(el.querySelector('#nuevo-costo').value)
+
+    if (!nombre) { toast('Escribe el nombre del producto', true); return }
+    if (isNaN(precio) || precio <= 0) { toast('Ingresa un precio válido', true); return }
+    if (isNaN(costo) || costo <= 0) { toast('Ingresa un costo válido', true); return }
+    if (costo >= precio) { toast('El costo debe ser menor al precio de venta', true); return }
+
+    const btn = el.querySelector('#a-confirmar-nuevo')
+    btn.disabled = true; btn.textContent = 'Guardando...'
+    try {
+      const { data, error } = await supabase
+        .from('productos')
+        .insert({ nombre, precio_lb: precio, costo_lb: costo, activo: true })
+        .select().single()
+      if (error) throw error
+      productos.push(data)
+      productos.sort((a, b) => a.nombre.localeCompare(b.nombre))
+      renderPrecios()
+      el.querySelector('#a-form-nuevo').style.display = 'none'
+      el.querySelector('#nuevo-nombre').value = ''
+      el.querySelector('#nuevo-precio').value = ''
+      el.querySelector('#nuevo-costo').value = ''
+      toast(`✅ ${nombre} agregado correctamente`)
+    } catch(e) {
+      if (e.message?.includes('unique')) toast('Ya existe un producto con ese nombre', true)
+      else toast('Error al agregar producto', true)
+    } finally { btn.disabled = false; btn.textContent = 'Agregar' }
+  })
+
+  // Enter en el formulario
+  el.querySelector('#nuevo-nombre').addEventListener('keydown', e => { if (e.key === 'Enter') el.querySelector('#nuevo-precio').focus() })
+  el.querySelector('#nuevo-precio').addEventListener('keydown', e => { if (e.key === 'Enter') el.querySelector('#nuevo-costo').focus() })
+  el.querySelector('#nuevo-costo').addEventListener('keydown', e => { if (e.key === 'Enter') el.querySelector('#a-confirmar-nuevo').click() })
+
+  // Guardar precios
   el.querySelector('#a-guardar-precios').addEventListener('click', async () => {
     const btn = el.querySelector('#a-guardar-precios')
     btn.disabled = true; btn.textContent = 'Guardando...'
@@ -325,6 +410,7 @@ export async function renderAdmin(nombre, onLogout) {
     a.click(); toast('Exportando...')
   })
 
+  // Cambio de precio en vivo
   window._precioChange = (input) => {
     const id   = parseInt(input.dataset.id)
     const tipo = input.dataset.tipo
@@ -340,13 +426,26 @@ export async function renderAdmin(nombre, onLogout) {
     if (b) { b.textContent = m.toFixed(1) + '%'; b.style.background = bg; b.style.color = tc }
   }
 
+  // Borrar producto
+  window._borrarProducto = async (id, nombre) => {
+    if (!confirm(`¿Eliminar "${nombre}"?\n\nEsta acción no se puede deshacer. El historial de ventas de este producto se conserva.`)) return
+    try {
+      const { error } = await supabase.from('productos').delete().eq('id', id)
+      if (error) throw error
+      productos = productos.filter(p => p.id !== id)
+      renderPrecios()
+      toast(`${nombre} eliminado`)
+    } catch(e) { toast('Error al eliminar. Verifica que el producto no tenga ventas activas.', true) }
+  }
+
+  // Borrar gasto
   window._delGasto = async (id) => {
     if (!confirm('¿Eliminar este gasto?')) return
     try { await deleteGasto(id); gastos = gastos.filter(g => g.id !== id); renderTodo(); toast('Eliminado') }
     catch(e) { toast('Error al eliminar', true) }
   }
 
-  // Realtime: ventas del vendedor aparecen al instante
+  // Realtime
   subscribeVentas(async () => {
     ventas = await getVentas(filtroDesde, filtroHasta)
     renderTodo()
