@@ -96,10 +96,11 @@ export async function renderAdmin(nombre, onLogout) {
               </div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 90px 90px 64px 36px;gap:4px;padding-bottom:6px;border-bottom:1px solid #E5E7EB;margin-bottom:4px">
+          <div style="display:grid;grid-template-columns:1fr 90px 90px 80px 64px 36px;gap:4px;padding-bottom:6px;border-bottom:1px solid #E5E7EB;margin-bottom:4px">
             <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase">Producto</span>
             <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Venta $/lb</span>
             <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Costo $/lb</span>
+            <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Tipo</span>
             <span style="font-size:11px;color:#9CA3AF;font-weight:500;text-transform:uppercase;text-align:center">Margen</span>
             <span></span>
           </div>
@@ -313,7 +314,8 @@ export async function renderAdmin(nombre, onLogout) {
       const m  = p.precio_lb > 0 ? ((p.precio_lb - p.costo_lb) / p.precio_lb * 100) : 0
       const bg = m >= 25 ? '#E1F5EE' : m >= 15 ? '#FAEEDA' : '#FCEBEB'
       const tc = m >= 25 ? '#085041' : m >= 15 ? '#633806' : '#A32D2D'
-      return `<div style="display:grid;grid-template-columns:1fr 90px 90px 64px 36px;gap:4px;align-items:center;padding:5px 0;border-bottom:1px solid #F3F4F6">
+      const tipoActual = p.tipo || 'granel'
+      return `<div style="display:grid;grid-template-columns:1fr 90px 90px 80px 64px 36px;gap:4px;align-items:center;padding:5px 0;border-bottom:1px solid #F3F4F6">
         <span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.nombre}">${p.nombre}</span>
         <input type="number" step="0.01" min="0" value="${Number(p.precio_lb).toFixed(2)}"
           data-id="${p.id}" data-tipo="precio" oninput="window._precioChange(this)"
@@ -321,6 +323,12 @@ export async function renderAdmin(nombre, onLogout) {
         <input type="number" step="0.01" min="0" value="${Number(p.costo_lb).toFixed(2)}"
           data-id="${p.id}" data-tipo="costo" oninput="window._precioChange(this)"
           style="padding:4px 6px;border:1px solid #E5E7EB;border-radius:6px;font-size:12px;text-align:right;width:100%">
+        <select data-id="${p.id}" onchange="window._tipoChange(this)"
+          style="padding:4px 4px;border:1px solid #E5E7EB;border-radius:6px;font-size:11px;width:100%;background:#fff">
+          <option value="granel" ${tipoActual==='granel'?'selected':''}>Granel</option>
+          <option value="unidad" ${tipoActual==='unidad'?'selected':''}>Unidad</option>
+          <option value="mix"    ${tipoActual==='mix'?'selected':''}>Mix</option>
+        </select>
         <span id="margen-${p.id}" style="font-size:11px;padding:2px 5px;border-radius:6px;background:${bg};color:${tc};font-weight:500;text-align:center">${m.toFixed(1)}%</span>
         <button onclick="window._borrarProducto(${p.id},'${p.nombre.replace(/'/g, "\'")}')"
           style="padding:3px 7px;background:#FCEBEB;color:#A32D2D;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600" title="Eliminar">×</button>
@@ -642,6 +650,18 @@ export async function renderAdmin(nombre, onLogout) {
     const tc = m >= 25 ? '#085041' : m >= 15 ? '#633806' : '#A32D2D'
     const b = document.getElementById(`margen-${id}`)
     if (b) { b.textContent = m.toFixed(1) + '%'; b.style.background = bg; b.style.color = tc }
+  }
+
+  window._tipoChange = async (select) => {
+    const id  = parseInt(select.dataset.id)
+    const val = select.value
+    const prod = productos.find(p => p.id === id)
+    if (!prod) return
+    prod.tipo = val
+    try {
+      await supabase.from('productos').update({ tipo: val }).eq('id', id)
+      toast('Tipo actualizado')
+    } catch(e) { toast('Error al actualizar tipo', true) }
   }
 
   window._borrarProducto = async (id, nombre) => {
