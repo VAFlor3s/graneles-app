@@ -147,7 +147,7 @@ export async function renderVendedor(nombre, onLogout) {
     label: unidades + (unidades === 1 ? ' mix' : ' mixes'),
     sublabel: `${gramosTotal}g total · $${pPorcion.toFixed(2)} por mix`
   }
-}
+  }
 
     // Granel (default)
     const gramos = pGr > 0 ? monto / pGr : 0
@@ -174,11 +174,13 @@ export async function renderVendedor(nombre, onLogout) {
 
     let mixInfo = ''
     if (result.tipo === 'mix' && prod.componentes) {
-      try {
-        const comps = JSON.parse(prod.componentes)
-        mixInfo = `<div style="font-size:11px;opacity:.7;margin-top:6px">Mix: ${comps.map(c => c.nombre + ' ' + (result.cantidad * c.porcentaje / 100).toFixed(1) + 'g').join(' · ')}</div>`
-      } catch(e) {}
-    }
+  try {
+    const comps = JSON.parse(prod.componentes)
+    mixInfo = `<div style="font-size:11px;opacity:.7;margin-top:6px">Mix: ${
+      comps.map(c => c.nombre + ' ' + c.gramos_fijos + 'g').join(' · ')
+    }</div>`
+  } catch(e) {}
+  }  
 
     res.innerHTML = `
       <div style="text-align:center">
