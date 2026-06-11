@@ -346,11 +346,43 @@ export async function renderAdmin(nombre, onLogout) {
     } catch(e) {}
   }
 
-  function calcSalidas(prodId, prodNombre) {
-    return ventas
-      .filter(v => v.producto_id === prodId || v.producto_nombre === prodNombre)
-      .reduce((s, v) => s + Number(v.gramos), 0)
-  }
+ function calcSalidas(prodId, prodNombre) {
+  // Salidas directas: ventas donde el producto fue vendido directamente
+  const directas = ventas
+    .filter(v => v.producto_id === prodId || v.producto_nombre === prodNombre)
+    .reduce((s, v) => s + Number(v.gramos), 0)
+
+  // Salidas indirectas: ventas de mixes que contienen este producto como ingrediente
+  const porMix = ventas
+    .filter(v => {
+      // Solo ventas de tipo mix
+      if (v.tipo_venta !== 'mix') return false
+      // Buscar el producto mix en la lista de productos
+      const prodMix = productos.find(p => p.id === v.producto_id)
+      if (!prodMix || !prodMix.componentes) return false
+      try {
+        const comps = JSON.parse(prodMix.componentes)
+        // Ver si este producto es uno de los ingredientes
+        return comps.some(c => c.producto_id === prodId)
+      } catch(e) { return false }
+    })
+    .reduce((s, v) => {
+      // Sumar solo los gramos que corresponden a este ingrediente
+      const prodMix = productos.find(p => p.id === v.producto_id)
+      try {
+        const comps = JSON.parse(prodMix.componentes)
+        const comp  = comps.find(c => c.producto_id === prodId)
+        if (!comp) return s
+        // Soporte para gramos fijos o porcentaje
+        const gramos = comp.gramos_fijos != null
+          ? comp.gramos_fijos
+          : (Number(v.gramos) * comp.porcentaje / 100)
+        return s + gramos
+      } catch(e) { return s }
+    }, 0)
+
+  return directas + porMix
+}
 
   async function renderInventario() {
     await cargarInventario()
