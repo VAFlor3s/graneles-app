@@ -1,4 +1,4 @@
-import { LB, getProductos, getVentas, insertVenta, deleteVenta, subscribeProductos, supabase, descontarInventario, descontarInventarioMix } from './supabase.js'
+import { LB, getProductos, getVentas, insertVenta, deleteVenta, subscribeProductos, supabase } from './supabase.js'
 
 
 export async function renderVendedor(nombre, onLogout) {
