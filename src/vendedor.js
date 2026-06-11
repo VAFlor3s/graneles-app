@@ -345,14 +345,6 @@ export async function renderVendedor(nombre, onLogout) {
     tipo_venta: getTipo(prod)
   })
 
-  // ── Descontar inventario ──────────────────────────────────────────
-  if (getTipo(prod) === 'mix' && prod.componentes) {
-    // Mix: descuenta cada ingrediente por separado
-    await descontarInventarioMix(prod.componentes, result.cantidad)
-  } else if (getTipo(prod) !== 'unidad') {
-    // Granel: descuenta directamente
-    await descontarInventario(prod.id, result.cantidad)
-  }
   // Productos tipo 'unidad' no descuentan inventario de gramos
   // ─────────────────────────────────────────────────────────────────
 
