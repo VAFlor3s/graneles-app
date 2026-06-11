@@ -194,23 +194,26 @@ export async function renderVendedor(nombre, onLogout) {
 
     let mixInfo = ''
     if (result.tipo === 'mix' && prod.componentes) {
-  try {
-    const comps = JSON.parse(prod.componentes)
-    mixInfo = `
-      <div style="margin-top:10px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #9FE1CB;text-align:left">
-        <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:8px;text-transform:uppercase">Ingredientes a pesar (${result.cantidad} mix${result.cantidad !== 1 ? 'es' : ''})</div>
-        ${comps.map(c => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #E1F5EE">
-            <span style="font-size:13px;color:#1F2937;font-weight:500">${c.nombre}</span>
-            <span style="font-size:15px;font-weight:700;color:#0F6E56">${c.gramos_fijos * result.cantidad}g</span>
-          </div>`).join('')}
-        <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px">
-          <span style="font-size:12px;color:#4B5563;font-weight:500">TOTAL</span>
-          <span style="font-size:14px;font-weight:700;color:#1F2937">${comps.reduce((s,c) => s + c.gramos_fijos, 0) * result.cantidad}g</span>
-        </div>
-      </div>`
-    } catch(e) {}
-  }
+      try {
+        const comps = JSON.parse(prod.componentes)
+        const totalG = comps.reduce((s, c) => s + (c.gramos_fijos || 0), 0) * result.cantidad
+        mixInfo = `
+          <div style="margin-top:12px;padding:12px 14px;background:#fff;border-radius:8px;border:1px solid #9FE1CB;text-align:left">
+            <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">
+              Ingredientes a pesar — ${result.cantidad} mix${result.cantidad !== 1 ? 'es' : ''}
+            </div>
+            ${comps.map(c => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #E1F5EE">
+                <span style="font-size:13px;color:#1F2937;font-weight:500">${c.nombre}</span>
+                <span style="font-size:16px;font-weight:700;color:#0F6E56">${c.gramos_fijos * result.cantidad} g</span>
+              </div>`).join('')}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding-top:7px">
+              <span style="font-size:12px;color:#4B5563;font-weight:600">TOTAL</span>
+              <span style="font-size:15px;font-weight:700;color:#1F2937">${totalG} g</span>
+            </div>
+          </div>`
+      } catch(e) {}
+    }
 
     res.innerHTML = `
       <div style="text-align:center">
