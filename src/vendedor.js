@@ -136,10 +136,18 @@ export async function renderVendedor(nombre, onLogout) {
     }
 
     if (tipo === 'mix') {
-      // Mix: calcular gramos igual que granel
-      const gramos = pGr > 0 ? monto / pGr : 0
-      return { tipo, cantidad: gramos, label: gramos.toFixed(1) + ' g', sublabel: `(${(gramos/LB).toFixed(3)} lb · ${(gramos/1000).toFixed(3)} kg)` }
-    }
+  // Mix de precio fijo: precio_lb = precio por porción
+  const pPorcion = pLb  // $1.60 por mix
+  const unidades = pPorcion > 0 ? Math.floor(monto / pPorcion) : 0
+  const gramosTotal = unidades * 182  // gramos fijos por porción
+  return {
+    tipo,
+    cantidad: unidades,
+    gramos_total: gramosTotal,
+    label: unidades + (unidades === 1 ? ' mix' : ' mixes'),
+    sublabel: `${gramosTotal}g total · $${pPorcion.toFixed(2)} por mix`
+  }
+}
 
     // Granel (default)
     const gramos = pGr > 0 ? monto / pGr : 0
