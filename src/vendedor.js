@@ -1,6 +1,5 @@
 import { LB, getProductos, getVentas, insertVenta, deleteVenta, subscribeProductos, supabase } from './supabase.js'
 
-
 export async function renderVendedor(nombre, onLogout) {
   let productos = []
   let ventas    = []
@@ -119,8 +118,17 @@ export async function renderVendedor(nombre, onLogout) {
   // Detectar tipo de producto
   function getTipo(p) {
     if (p.tipo === 'unidad') return 'unidad'
-    if (p.tipo === 'mix') return 'mix'
+    if (p.tipo === 'mix')    return 'mix'
     return 'granel'
+  }
+
+  // Gramos fijos totales de un mix (suma de gramos_fijos de cada componente)
+  function getGramosMix(prod) {
+    if (!prod.componentes) return 182 // fallback
+    try {
+      const comps = JSON.parse(prod.componentes)
+      return comps.reduce((s, c) => s + (c.gramos_fijos || 0), 0)
+    } catch(e) { return 182 }
   }
 
   // Calcular resultado según tipo
@@ -130,28 +138,40 @@ export async function renderVendedor(nombre, onLogout) {
     const pGr  = pLb / LB
 
     if (tipo === 'unidad') {
-      // Productos por unidad: precio_lb = precio por unidad
       const unidades = pLb > 0 ? monto / pLb : 0
-      return { tipo, cantidad: unidades, label: unidades.toFixed(2) + ' unidades', sublabel: `$${pLb.toFixed(2)} por unidad` }
+      return {
+        tipo,
+        cantidad: unidades,
+        gramos_total: 0,
+        label: unidades.toFixed(2) + ' unidades',
+        sublabel: `$${pLb.toFixed(2)} por unidad`
+      }
     }
 
     if (tipo === 'mix') {
-  // Mix de precio fijo: precio_lb = precio por porción
-  const pPorcion = pLb  // $1.60 por mix
-  const unidades = pPorcion > 0 ? Math.floor(monto / pPorcion) : 0
-  const gramosTotal = unidades * 182  // gramos fijos por porción
-  return {
-    tipo,
-    cantidad: unidades,
-    gramos_total: gramosTotal,
-    label: unidades + (unidades === 1 ? ' mix' : ' mixes'),
-    sublabel: `${gramosTotal}g total · $${pPorcion.toFixed(2)} por mix`
-  }
-  }
+      // Precio fijo por porción: precio_lb = precio por mix
+      const pPorcion    = pLb
+      const unidades    = pPorcion > 0 ? Math.floor(monto / pPorcion) : 0
+      const gramosMix   = getGramosMix(prod)
+      const gramosTotal = unidades * gramosMix
+      return {
+        tipo,
+        cantidad: unidades,
+        gramos_total: gramosTotal,
+        label: unidades + (unidades === 1 ? ' mix' : ' mixes'),
+        sublabel: `${gramosTotal}g total · $${pPorcion.toFixed(2)} por mix`
+      }
+    }
 
     // Granel (default)
     const gramos = pGr > 0 ? monto / pGr : 0
-    return { tipo, cantidad: gramos, label: gramos.toFixed(1) + ' g', sublabel: `(${(gramos/LB).toFixed(3)} lb · ${(gramos/1000).toFixed(3)} kg)` }
+    return {
+      tipo,
+      cantidad: gramos,
+      gramos_total: gramos,
+      label: gramos.toFixed(1) + ' g',
+      sublabel: `(${(gramos/LB).toFixed(3)} lb · ${(gramos/1000).toFixed(3)} kg)`
+    }
   }
 
   function calcGramos() {
@@ -174,13 +194,13 @@ export async function renderVendedor(nombre, onLogout) {
 
     let mixInfo = ''
     if (result.tipo === 'mix' && prod.componentes) {
-  try {
-    const comps = JSON.parse(prod.componentes)
-    mixInfo = `<div style="font-size:11px;opacity:.7;margin-top:6px">Mix: ${
-      comps.map(c => c.nombre + ' ' + c.gramos_fijos + 'g').join(' · ')
-    }</div>`
-  } catch(e) {}
-  }  
+      try {
+        const comps = JSON.parse(prod.componentes)
+        mixInfo = `<div style="font-size:11px;opacity:.7;margin-top:6px">Mix: ${
+          comps.map(c => c.nombre + ' ' + c.gramos_fijos + 'g').join(' · ')
+        }</div>`
+      } catch(e) {}
+    }
 
     res.innerHTML = `
       <div style="text-align:center">
@@ -204,19 +224,22 @@ export async function renderVendedor(nombre, onLogout) {
       let filas = ''
 
       if (tipo === 'unidad') {
-        // Por unidad
         filas = `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
             <span style="font-size:12px;color:#6B7280">Por unidad</span>
             <span style="font-size:14px;font-weight:600;color:#1F2937">$${pLb.toFixed(2)}</span>
           </div>`
+      } else if (tipo === 'mix') {
+        const gramosMix = getGramosMix(p)
+        filas = `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+            <span style="font-size:12px;color:#6B7280">Por mix (${gramosMix}g)</span>
+            <span style="font-size:14px;font-weight:600;color:#1F2937">$${pLb.toFixed(2)}</span>
+          </div>`
       } else {
-        // Granel o mix — mostrar precio $1, media libra, libra
-        const g_por_1dolar   = pGr > 0 ? (1 / pGr) : 0
-        const g_media_libra  = LB / 2           // 226.796 g
-        const precio_media   = pGr * g_media_libra
-        const precio_libra   = pLb
-
+        const g_por_1dolar  = pGr > 0 ? (1 / pGr) : 0
+        const g_media_libra = LB / 2
+        const precio_media  = pGr * g_media_libra
         filas = `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6">
             <span style="font-size:12px;color:#6B7280">$1.00</span>
@@ -228,7 +251,7 @@ export async function renderVendedor(nombre, onLogout) {
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
             <span style="font-size:12px;color:#6B7280">1 libra (${LB.toFixed(0)} g)</span>
-            <span style="font-size:13px;font-weight:600;color:#1F2937">$${precio_libra.toFixed(2)}</span>
+            <span style="font-size:13px;font-weight:600;color:#1F2937">$${pLb.toFixed(2)}</span>
           </div>`
       }
 
@@ -259,9 +282,18 @@ export async function renderVendedor(nombre, onLogout) {
     tabla.classList.remove('hidden'); empty.style.display = 'none'
 
     tbody.innerHTML = hoy.map(v => {
-      const cantidadLabel = v.tipo_venta === 'unidad'
-        ? Number(v.gramos).toFixed(2) + ' und'
-        : Number(v.gramos).toFixed(1) + ' g'
+      let cantidadLabel
+      if (v.tipo_venta === 'unidad') {
+        cantidadLabel = Number(v.gramos).toFixed(2) + ' und'
+      } else if (v.tipo_venta === 'mix') {
+        // gramos guarda gramos totales; mostrar cuántos mixes fueron
+        const prod      = productos.find(p => p.id === v.producto_id)
+        const gramosMix = prod ? getGramosMix(prod) : 182
+        const unidades  = gramosMix > 0 ? Math.round(Number(v.gramos) / gramosMix) : 1
+        cantidadLabel   = unidades + (unidades === 1 ? ' mix' : ' mixes') + ` (${Number(v.gramos).toFixed(0)}g)`
+      } else {
+        cantidadLabel = Number(v.gramos).toFixed(1) + ' g'
+      }
       return `<tr style="border-bottom:1px solid #F3F4F6">
         <td style="padding:9px 6px;font-weight:500">${v.producto_nombre}</td>
         <td style="padding:9px 6px;text-align:right">$${Number(v.monto).toFixed(2)}</td>
@@ -280,7 +312,6 @@ export async function renderVendedor(nombre, onLogout) {
     const val = sel.value
     sel.innerHTML = '<option value="">— seleccionar —</option>'
 
-    // Agrupar: primero granel y mix, luego unidad
     const granel = productos.filter(p => getTipo(p) !== 'unidad')
     const unidad = productos.filter(p => getTipo(p) === 'unidad')
 
@@ -332,40 +363,52 @@ export async function renderVendedor(nombre, onLogout) {
     const prod   = productos.find(p => p.id === parseInt(opt.value))
     if (!prod) return
     const result = calcResultado(prod, monto)
+    const tipo   = getTipo(prod)
     const pLb    = Number(prod.precio_lb)
     const cLb    = Number(prod.costo_lb)
     const pGr    = pLb / LB
     const cGr    = cLb / LB
 
+    // Para mix: guardar gramos totales reales en la columna gramos
+    // Para granel/unidad: guardar la cantidad calculada normalmente
+    const gramosVenta = tipo === 'mix'
+      ? result.gramos_total          // unidades × gramos por mix
+      : result.cantidad              // gramos (granel) o unidades
+
+    const utilidadVenta = tipo === 'unidad'
+      ? (pLb - cLb) * result.cantidad
+      : tipo === 'mix'
+        ? (pLb - cLb) * result.cantidad   // utilidad por porción × unidades
+        : (pGr - cGr) * result.cantidad
+
+    if (tipo === 'mix' && result.cantidad === 0) {
+      toast('El monto no alcanza para ningún mix ($' + pLb.toFixed(2) + ' por mix)', true)
+      return
+    }
+
     const btn = el.querySelector('#v-registrar')
     btn.disabled = true; btn.textContent = 'Guardando...'
-   try {
-  const nueva = await insertVenta({
-    fecha: today, vendedor: nombre, turno,
-    producto_id: prod.id,
-    producto_nombre: prod.nombre,
-    monto,
-    precio_gr: getTipo(prod) === 'unidad' ? pLb : pGr,
-    costo_gr:  getTipo(prod) === 'unidad' ? cLb : cGr,
-    gramos: result.cantidad,
-    utilidad: getTipo(prod) === 'unidad'
-      ? (pLb - cLb) * result.cantidad
-      : (pGr - cGr) * result.cantidad,
-    margen: pLb > 0 ? (pLb - cLb) / pLb : 0,
-    tipo_venta: getTipo(prod)
-  })
-
-  // Productos tipo 'unidad' no descuentan inventario de gramos
-  // ─────────────────────────────────────────────────────────────────
-
-  ventas.unshift(nueva)
-  el.querySelector('#v-producto').value = ''
-  el.querySelector('#v-monto').value = ''
-  calcGramos(); renderTabla()
-  toast('Venta registrada ✓')
-} catch(e) {
-  toast('Error al guardar. Revisa tu conexión.', true)
-} finally {
+    try {
+      const nueva = await insertVenta({
+        fecha: today, vendedor: nombre, turno,
+        producto_id:     prod.id,
+        producto_nombre: prod.nombre,
+        monto,
+        precio_gr: tipo === 'unidad' ? pLb : pGr,
+        costo_gr:  tipo === 'unidad' ? cLb : cGr,
+        gramos:    gramosVenta,
+        utilidad:  utilidadVenta,
+        margen:    pLb > 0 ? (pLb - cLb) / pLb : 0,
+        tipo_venta: tipo
+      })
+      ventas.unshift(nueva)
+      el.querySelector('#v-producto').value = ''
+      el.querySelector('#v-monto').value = ''
+      calcGramos(); renderTabla()
+      toast('Venta registrada ✓')
+    } catch(e) {
+      toast('Error al guardar. Revisa tu conexión.', true)
+    } finally {
       btn.disabled = false; btn.textContent = 'Registrar venta'
     }
   })
