@@ -329,29 +329,41 @@ export async function renderVendedor(nombre, onLogout) {
 
     const btn = el.querySelector('#v-registrar')
     btn.disabled = true; btn.textContent = 'Guardando...'
-    try {
-      const nueva = await insertVenta({
-        fecha: today, vendedor: nombre, turno,
-        producto_id: prod.id,
-        producto_nombre: prod.nombre,
-        monto,
-        precio_gr: getTipo(prod) === 'unidad' ? pLb : pGr,
-        costo_gr:  getTipo(prod) === 'unidad' ? cLb : cGr,
-        gramos: result.cantidad,
-        utilidad: getTipo(prod) === 'unidad'
-          ? (pLb - cLb) * result.cantidad
-          : (pGr - cGr) * result.cantidad,
-        margen: pLb > 0 ? (pLb - cLb) / pLb : 0,
-        tipo_venta: getTipo(prod)
-      })
-      ventas.unshift(nueva)
-      el.querySelector('#v-producto').value = ''
-      el.querySelector('#v-monto').value = ''
-      calcGramos(); renderTabla()
-      toast('Venta registrada ✓')
-    } catch(e) {
-      toast('Error al guardar. Revisa tu conexión.', true)
-    } finally {
+   try {
+  const nueva = await insertVenta({
+    fecha: today, vendedor: nombre, turno,
+    producto_id: prod.id,
+    producto_nombre: prod.nombre,
+    monto,
+    precio_gr: getTipo(prod) === 'unidad' ? pLb : pGr,
+    costo_gr:  getTipo(prod) === 'unidad' ? cLb : cGr,
+    gramos: result.cantidad,
+    utilidad: getTipo(prod) === 'unidad'
+      ? (pLb - cLb) * result.cantidad
+      : (pGr - cGr) * result.cantidad,
+    margen: pLb > 0 ? (pLb - cLb) / pLb : 0,
+    tipo_venta: getTipo(prod)
+  })
+
+  // ── Descontar inventario ──────────────────────────────────────────
+  if (getTipo(prod) === 'mix' && prod.componentes) {
+    // Mix: descuenta cada ingrediente por separado
+    await descontarInventarioMix(prod.componentes, result.cantidad)
+  } else if (getTipo(prod) !== 'unidad') {
+    // Granel: descuenta directamente
+    await descontarInventario(prod.id, result.cantidad)
+  }
+  // Productos tipo 'unidad' no descuentan inventario de gramos
+  // ─────────────────────────────────────────────────────────────────
+
+  ventas.unshift(nueva)
+  el.querySelector('#v-producto').value = ''
+  el.querySelector('#v-monto').value = ''
+  calcGramos(); renderTabla()
+  toast('Venta registrada ✓')
+} catch(e) {
+  toast('Error al guardar. Revisa tu conexión.', true)
+} finally {
       btn.disabled = false; btn.textContent = 'Registrar venta'
     }
   })
