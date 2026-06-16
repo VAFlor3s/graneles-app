@@ -87,9 +87,20 @@ export async function renderVendedor(nombre, onLogout) {
       <!-- TAB: LISTA DE PRECIOS -->
       <div id="tab-precios" class="hidden">
         <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
-          <h2 style="font-size:15px;font-weight:600;color:#1F2937;margin-bottom:4px">Lista de precios</h2>
-          <p style="font-size:12px;color:#9CA3AF;margin-bottom:16px">Precios de venta al público · se actualiza automáticamente</p>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;gap:12px">
+            <div>
+              <h2 style="font-size:15px;font-weight:600;color:#1F2937;margin-bottom:4px">Lista de precios</h2>
+              <p style="font-size:12px;color:#9CA3AF">Precios de venta al público · se actualiza automáticamente</p>
+            </div>
+            <button id="v-exportar-precios" style="white-space:nowrap;padding:8px 14px;border:1px solid #E5E7EB;border-radius:8px;background:#fff;font-size:12px;color:#4B5563;font-weight:500;cursor:pointer">⬇ Exportar CSV</button>
+          </div>
+          <div style="position:relative;margin:14px 0 16px">
+            <input id="v-buscar-precio" type="text" placeholder="Buscar producto..."
+              style="width:100%;padding:9px 12px 9px 34px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+            <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:#9CA3AF">🔍</span>
+          </div>
           <div id="v-lista-precios" style="display:grid;gap:6px"></div>
+          <div id="v-precios-empty" class="hidden" style="text-align:center;padding:24px;color:#9CA3AF;font-size:13px">Sin resultados para esa búsqueda</div>
         </div>
       </div>
 
@@ -226,10 +237,23 @@ export async function renderVendedor(nombre, onLogout) {
 
   // ── Lista de precios ──────────────────────────────────────────────────────────
   function renderListaPrecios() {
-    const lista = el.querySelector('#v-lista-precios')
+    const lista  = el.querySelector('#v-lista-precios')
+    const empty  = el.querySelector('#v-precios-empty')
     if (!lista) return
 
-    lista.innerHTML = productos.map(p => {
+    const q = (el.querySelector('#v-buscar-precio')?.value || '').trim().toLowerCase()
+    const filtrados = q
+      ? productos.filter(p => p.nombre.toLowerCase().includes(q))
+      : productos
+
+    if (!filtrados.length) {
+      lista.innerHTML = ''
+      empty.classList.remove('hidden')
+      return
+    }
+    empty.classList.add('hidden')
+
+    lista.innerHTML = filtrados.map(p => {
       const pLb  = Number(p.precio_lb)
       const pGr  = pLb / LB
       const tipo = getTipo(p)
@@ -357,6 +381,41 @@ export async function renderVendedor(nombre, onLogout) {
   // ── Eventos ───────────────────────────────────────────────────────────────────
   el.querySelector('#v-producto').addEventListener('change', calcGramos)
   el.querySelector('#v-monto').addEventListener('input', calcGramos)
+
+  el.querySelector('#v-buscar-precio').addEventListener('input', renderListaPrecios)
+
+  el.querySelector('#v-exportar-precios').addEventListener('click', () => {
+    if (!productos.length) { toast('Sin productos para exportar', true); return }
+
+    const rows = ['Producto,Tipo,Detalle,Precio']
+
+    productos.forEach(p => {
+      const pLb  = Number(p.precio_lb)
+      const pGr  = pLb / LB
+      const tipo = getTipo(p)
+
+      if (tipo === 'unidad') {
+        rows.push(`${p.nombre},Por unidad,—,$${pLb.toFixed(2)}`)
+      } else if (tipo === 'mix') {
+        const gramosMix = getGramosMix(p)
+        rows.push(`${p.nombre},Mix,Por mix (${gramosMix}g),$${pLb.toFixed(2)}`)
+      } else {
+        const g_por_1dolar  = pGr > 0 ? (1 / pGr) : 0
+        const g_media_libra = LB / 2
+        const precio_media  = pGr * g_media_libra
+        rows.push(`${p.nombre},Granel,$1.00,${g_por_1dolar.toFixed(1)} g`)
+        rows.push(`${p.nombre},Granel,½ libra (${g_media_libra.toFixed(0)} g),$${precio_media.toFixed(2)}`)
+        rows.push(`${p.nombre},Granel,1 libra (${LB.toFixed(0)} g),$${pLb.toFixed(2)}`)
+      }
+    })
+
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `lista_precios_${today}.csv`
+    a.click()
+    toast('Exportando lista de precios...')
+  })
 
   el.querySelector('#v-limpiar').addEventListener('click', () => {
     el.querySelector('#v-producto').value = ''
