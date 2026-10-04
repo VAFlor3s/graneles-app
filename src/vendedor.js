@@ -5,6 +5,9 @@ export async function renderVendedor(nombre, onLogout) {
   let ventas    = []
   const today   = new Date().toISOString().split('T')[0]
 
+  // Modo de entrada: 'monto' | 'gramos' | 'cantidad'
+  let modoEntrada = 'monto'
+
   const el = document.createElement('div')
   el.style.cssText = 'min-height:100vh;background:#F9FAFB'
 
@@ -33,7 +36,8 @@ export async function renderVendedor(nombre, onLogout) {
       <div id="tab-vender">
         <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:22px">
           <h2 style="font-size:15px;font-weight:600;color:#1F2937;margin-bottom:16px">Nueva venta</h2>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
             <div>
               <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:5px">Turno</label>
               <select id="v-turno" style="width:100%;padding:9px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px;background:#fff">
@@ -46,10 +50,47 @@ export async function renderVendedor(nombre, onLogout) {
                 <option value="">— seleccionar —</option>
               </select>
             </div>
-            <div>
-              <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:5px">Monto solicitado ($)</label>
-              <input id="v-monto" type="number" min="0" step="0.01" placeholder="ej: 4.00"
-                style="width:100%;padding:9px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+          </div>
+
+          <!-- TOGGLE MODO + INPUT DINÁMICO -->
+          <div id="v-entrada-wrap" style="margin-bottom:14px">
+            <!-- Para granel/mix: toggle monto/gramos -->
+            <div id="v-toggle-wrap" style="display:none;margin-bottom:8px">
+              <div style="display:inline-flex;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden">
+                <button id="btn-modo-monto" data-modo="monto"
+                  style="padding:7px 18px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#1D9E75;color:#fff">
+                  $ Monto
+                </button>
+                <button id="btn-modo-gramos" data-modo="gramos"
+                  style="padding:7px 18px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:#fff;color:#6B7280">
+                  ⚖ Gramos
+                </button>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr;gap:8px">
+              <!-- Input monto (granel/mix) -->
+              <div id="v-input-monto-wrap">
+                <label id="v-label-monto" style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:5px">Monto solicitado ($)</label>
+                <input id="v-monto" type="number" min="0" step="0.01" placeholder="ej: 4.00"
+                  style="width:100%;padding:9px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+              </div>
+              <!-- Input gramos (solo granel) -->
+              <div id="v-input-gramos-wrap" style="display:none">
+                <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:5px">Gramos a vender (g)</label>
+                <input id="v-gramos" type="number" min="0" step="1" placeholder="ej: 250"
+                  style="width:100%;padding:9px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:13px">
+              </div>
+              <!-- Input cantidad (unidad) -->
+              <div id="v-input-cantidad-wrap" style="display:none">
+                <label style="font-size:12px;color:#4B5563;font-weight:500;display:block;margin-bottom:5px">Cantidad de unidades</label>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <button id="v-cant-menos" style="width:36px;height:36px;border:1px solid #E5E7EB;border-radius:8px;background:#fff;font-size:18px;font-weight:600;color:#4B5563;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">−</button>
+                  <input id="v-cantidad" type="number" min="1" step="1" value="1"
+                    style="flex:1;padding:9px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:16px;font-weight:700;text-align:center">
+                  <button id="v-cant-mas" style="width:36px;height:36px;border:1px solid #E5E7EB;border-radius:8px;background:#fff;font-size:18px;font-weight:600;color:#4B5563;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">+</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -126,130 +167,216 @@ export async function renderVendedor(nombre, onLogout) {
     t.style.opacity = '1'; setTimeout(() => { t.style.opacity = '0' }, 2600)
   }
 
-  // Detectar tipo de producto
   function getTipo(p) {
     if (p.tipo === 'unidad') return 'unidad'
     if (p.tipo === 'mix')    return 'mix'
     return 'granel'
   }
 
-  // Gramos fijos totales de un mix (suma de gramos_fijos de cada componente)
   function getGramosMix(prod) {
-    if (!prod.componentes) return 182 // fallback
+    if (!prod.componentes) return 182
     try {
-      const comps = JSON.parse(prod.componentes)
+      const comps = typeof prod.componentes === 'string'
+        ? JSON.parse(prod.componentes)
+        : prod.componentes
       return comps.reduce((s, c) => s + (c.gramos_fijos || 0), 0)
     } catch(e) { return 182 }
   }
 
-  // Calcular resultado según tipo
-  function calcResultado(prod, monto) {
-    const tipo = getTipo(prod)
-    const pLb  = Number(prod.precio_lb)
-    const pGr  = pLb / LB
+  // ── Actualizar UI según tipo de producto seleccionado ─────────────────────────
+  function actualizarModoEntrada(prod) {
+    const tipo             = prod ? getTipo(prod) : 'granel'
+    const toggleWrap       = el.querySelector('#v-toggle-wrap')
+    const inputMontoWrap   = el.querySelector('#v-input-monto-wrap')
+    const inputGramosWrap  = el.querySelector('#v-input-gramos-wrap')
+    const inputCantWrap    = el.querySelector('#v-input-cantidad-wrap')
+    const labelMonto       = el.querySelector('#v-label-monto')
 
     if (tipo === 'unidad') {
-      const unidades = pLb > 0 ? monto / pLb : 0
-      return {
-        tipo,
-        cantidad: unidades,
-        gramos_total: 0,
-        label: unidades.toFixed(2) + ' unidades',
-        sublabel: `$${pLb.toFixed(2)} por unidad`
-      }
-    }
-
-    if (tipo === 'mix') {
-      // Precio fijo por porción: precio_lb = precio por mix
-      const pPorcion    = pLb
-      const unidades    = pPorcion > 0 ? Math.floor(monto / pPorcion) : 0
-      const gramosMix   = getGramosMix(prod)
-      const gramosTotal = unidades * gramosMix
-      return {
-        tipo,
-        cantidad: unidades,
-        gramos_total: gramosTotal,
-        label: unidades + (unidades === 1 ? ' mix' : ' mixes'),
-        sublabel: `${gramosTotal}g total · $${pPorcion.toFixed(2)} por mix`
-      }
-    }
-
-    // Granel (default)
-    const gramos = pGr > 0 ? monto / pGr : 0
-    return {
-      tipo,
-      cantidad: gramos,
-      gramos_total: gramos,
-      label: gramos.toFixed(1) + ' g',
-      sublabel: `(${(gramos/LB).toFixed(3)} lb · ${(gramos/1000).toFixed(3)} kg)`
+      // Solo modo cantidad
+      modoEntrada = 'cantidad'
+      toggleWrap.style.display      = 'none'
+      inputMontoWrap.style.display  = 'none'
+      inputGramosWrap.style.display = 'none'
+      inputCantWrap.style.display   = 'block'
+    } else if (tipo === 'mix') {
+      // Solo modo monto (mix tiene precio fijo por unidad)
+      modoEntrada = 'monto'
+      toggleWrap.style.display      = 'none'
+      inputMontoWrap.style.display  = 'block'
+      inputGramosWrap.style.display = 'none'
+      inputCantWrap.style.display   = 'none'
+      labelMonto.textContent        = 'Monto solicitado ($)'
+    } else {
+      // Granel: toggle monto/gramos
+      toggleWrap.style.display = 'flex'
+      aplicarModoToggle(modoEntrada === 'gramos' ? 'gramos' : 'monto')
     }
   }
 
-  function calcGramos() {
-    const sel   = el.querySelector('#v-producto')
-    const opt   = sel.options[sel.selectedIndex]
-    const monto = parseFloat(el.querySelector('#v-monto').value)
-    const res   = el.querySelector('#v-resultado')
+  function aplicarModoToggle(modo) {
+    modoEntrada = modo
+    const inputMontoWrap  = el.querySelector('#v-input-monto-wrap')
+    const inputGramosWrap = el.querySelector('#v-input-gramos-wrap')
+    const btnMonto        = el.querySelector('#btn-modo-monto')
+    const btnGramos       = el.querySelector('#btn-modo-gramos')
 
-    if (!opt || !opt.value || isNaN(monto) || monto <= 0) {
+    if (modo === 'gramos') {
+      inputMontoWrap.style.display  = 'none'
+      inputGramosWrap.style.display = 'block'
+      btnMonto.style.background  = '#fff';  btnMonto.style.color  = '#6B7280'
+      btnGramos.style.background = '#1D9E75'; btnGramos.style.color = '#fff'
+      el.querySelector('#v-gramos').focus()
+    } else {
+      inputMontoWrap.style.display  = 'block'
+      inputGramosWrap.style.display = 'none'
+      btnMonto.style.background  = '#1D9E75'; btnMonto.style.color  = '#fff'
+      btnGramos.style.background = '#fff';    btnGramos.style.color = '#6B7280'
+      el.querySelector('#v-monto').focus()
+    }
+    recalcular()
+  }
+
+  // ── Calcular resultado ────────────────────────────────────────────────────────
+  function recalcular() {
+    const sel  = el.querySelector('#v-producto')
+    const opt  = sel.options[sel.selectedIndex]
+    const res  = el.querySelector('#v-resultado')
+
+    if (!opt || !opt.value) {
       res.style.background = '#F3F4F6'; res.style.color = '#9CA3AF'
       res.innerHTML = 'Selecciona un producto e ingresa el monto'
       return
     }
 
-    const prod   = productos.find(p => p.id === parseInt(opt.value))
+    const prod = productos.find(p => p.id === parseInt(opt.value))
     if (!prod) return
-    const result = calcResultado(prod, monto)
 
-    res.style.background = '#E1F5EE'; res.style.color = '#085041'
+    const tipo = getTipo(prod)
+    const pLb  = Number(prod.precio_lb)
+    const pGr  = pLb / LB
+    const cLb  = Number(prod.costo_lb)
+    const cGr  = cLb / LB
 
-    let mixInfo = ''
-    if (result.tipo === 'mix' && prod.componentes) {
-      try {
-        const comps = JSON.parse(prod.componentes)
-        const totalG = comps.reduce((s, c) => s + (c.gramos_fijos || 0), 0) * result.cantidad
-        mixInfo = `
-          <div style="margin-top:12px;padding:12px 14px;background:#fff;border-radius:8px;border:1px solid #9FE1CB;text-align:left">
-            <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">
-              Ingredientes a pesar — ${result.cantidad} mix${result.cantidad !== 1 ? 'es' : ''}
-            </div>
-            ${comps.map(c => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #E1F5EE">
-                <span style="font-size:13px;color:#1F2937;font-weight:500">${c.nombre}</span>
-                <span style="font-size:16px;font-weight:700;color:#0F6E56">${c.gramos_fijos * result.cantidad} g</span>
-              </div>`).join('')}
-            <div style="display:flex;justify-content:space-between;align-items:center;padding-top:7px">
-              <span style="font-size:12px;color:#4B5563;font-weight:600">TOTAL</span>
-              <span style="font-size:15px;font-weight:700;color:#1F2937">${totalG} g</span>
-            </div>
-          </div>`
-      } catch(e) {}
+    // ── Unidad ────────────────────────────────────────────────────────────────
+    if (tipo === 'unidad') {
+      const cant = parseInt(el.querySelector('#v-cantidad').value) || 0
+      if (cant <= 0) {
+        res.style.background = '#F3F4F6'; res.style.color = '#9CA3AF'
+        res.innerHTML = 'Ingresa la cantidad de unidades'
+        return
+      }
+      const monto = pLb * cant
+      res.style.background = '#E1F5EE'; res.style.color = '#085041'
+      res.innerHTML = `
+        <div style="text-align:center">
+          <div style="font-size:12px;opacity:.7;margin-bottom:4px">${prod.nombre} × ${cant}</div>
+          <div style="font-size:42px;font-weight:700;line-height:1;color:#0F6E56">$${monto.toFixed(2)}</div>
+          <div style="font-size:13px;margin-top:6px;opacity:.8">$${pLb.toFixed(2)} por unidad · ${cant} und</div>
+        </div>`
+      return
     }
 
-    res.innerHTML = `
-      <div style="text-align:center">
-        <div style="font-size:12px;opacity:.7;margin-bottom:4px">${prod.nombre} — $${monto.toFixed(2)}</div>
-        <div style="font-size:42px;font-weight:700;line-height:1;color:#0F6E56">${result.label}</div>
-        <div style="font-size:13px;margin-top:6px;opacity:.8">${result.sublabel}</div>
-        ${mixInfo}
-      </div>`
+    // ── Mix ───────────────────────────────────────────────────────────────────
+    if (tipo === 'mix') {
+      const monto = parseFloat(el.querySelector('#v-monto').value)
+      if (isNaN(monto) || monto <= 0) {
+        res.style.background = '#F3F4F6'; res.style.color = '#9CA3AF'
+        res.innerHTML = 'Ingresa el monto solicitado'
+        return
+      }
+      const pPorcion  = pLb
+      const unidades  = pPorcion > 0 ? Math.floor(monto / pPorcion) : 0
+      const gramosMix = getGramosMix(prod)
+      const gramosTotal = unidades * gramosMix
+
+      if (unidades === 0) {
+        res.style.background = '#FCEBEB'; res.style.color = '#A32D2D'
+        res.innerHTML = `<div>El monto no alcanza para ningún mix ($${pPorcion.toFixed(2)} por mix)</div>`
+        return
+      }
+
+      let compInfo = ''
+      try {
+        const comps = typeof prod.componentes === 'string'
+          ? JSON.parse(prod.componentes) : prod.componentes
+        if (comps && comps.length) {
+          const totalG = comps.reduce((s, c) => s + (c.gramos_fijos || 0), 0) * unidades
+          compInfo = `
+            <div style="margin-top:12px;padding:12px 14px;background:#fff;border-radius:8px;border:1px solid #9FE1CB;text-align:left">
+              <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">
+                Ingredientes a pesar — ${unidades} mix${unidades !== 1 ? 'es' : ''}
+              </div>
+              ${comps.map(c => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #E1F5EE">
+                  <span style="font-size:13px;color:#1F2937;font-weight:500">${c.nombre}</span>
+                  <span style="font-size:16px;font-weight:700;color:#0F6E56">${c.gramos_fijos * unidades} g</span>
+                </div>`).join('')}
+              <div style="display:flex;justify-content:space-between;align-items:center;padding-top:7px">
+                <span style="font-size:12px;color:#4B5563;font-weight:600">TOTAL</span>
+                <span style="font-size:15px;font-weight:700;color:#1F2937">${totalG} g</span>
+              </div>
+            </div>`
+        }
+      } catch(e) {}
+
+      res.style.background = '#E1F5EE'; res.style.color = '#085041'
+      res.innerHTML = `
+        <div style="text-align:center">
+          <div style="font-size:12px;opacity:.7;margin-bottom:4px">${prod.nombre} — $${monto.toFixed(2)}</div>
+          <div style="font-size:42px;font-weight:700;line-height:1;color:#0F6E56">${unidades} mix${unidades !== 1 ? 'es' : ''}</div>
+          <div style="font-size:13px;margin-top:6px;opacity:.8">${gramosTotal}g total · $${pPorcion.toFixed(2)} por mix</div>
+          ${compInfo}
+        </div>`
+      return
+    }
+
+    // ── Granel ────────────────────────────────────────────────────────────────
+    if (modoEntrada === 'gramos') {
+      const gramos = parseFloat(el.querySelector('#v-gramos').value)
+      if (isNaN(gramos) || gramos <= 0) {
+        res.style.background = '#F3F4F6'; res.style.color = '#9CA3AF'
+        res.innerHTML = 'Ingresa los gramos a vender'
+        return
+      }
+      const monto = pGr * gramos
+      res.style.background = '#E1F5EE'; res.style.color = '#085041'
+      res.innerHTML = `
+        <div style="text-align:center">
+          <div style="font-size:12px;opacity:.7;margin-bottom:4px">${prod.nombre} — ${gramos.toFixed(1)} g</div>
+          <div style="font-size:42px;font-weight:700;line-height:1;color:#0F6E56">$${monto.toFixed(2)}</div>
+          <div style="font-size:13px;margin-top:6px;opacity:.8">(${(gramos/LB).toFixed(3)} lb · ${(gramos/1000).toFixed(3)} kg)</div>
+        </div>`
+    } else {
+      // modoEntrada === 'monto'
+      const monto = parseFloat(el.querySelector('#v-monto').value)
+      if (isNaN(monto) || monto <= 0) {
+        res.style.background = '#F3F4F6'; res.style.color = '#9CA3AF'
+        res.innerHTML = 'Selecciona un producto e ingresa el monto'
+        return
+      }
+      const gramos = pGr > 0 ? monto / pGr : 0
+      res.style.background = '#E1F5EE'; res.style.color = '#085041'
+      res.innerHTML = `
+        <div style="text-align:center">
+          <div style="font-size:12px;opacity:.7;margin-bottom:4px">${prod.nombre} — $${monto.toFixed(2)}</div>
+          <div style="font-size:42px;font-weight:700;line-height:1;color:#0F6E56">${gramos.toFixed(1)} g</div>
+          <div style="font-size:13px;margin-top:6px;opacity:.8">(${(gramos/LB).toFixed(3)} lb · ${(gramos/1000).toFixed(3)} kg)</div>
+        </div>`
+    }
   }
 
   // ── Lista de precios ──────────────────────────────────────────────────────────
   function renderListaPrecios() {
-    const lista  = el.querySelector('#v-lista-precios')
-    const empty  = el.querySelector('#v-precios-empty')
+    const lista = el.querySelector('#v-lista-precios')
+    const empty = el.querySelector('#v-precios-empty')
     if (!lista) return
 
     const q = (el.querySelector('#v-buscar-precio')?.value || '').trim().toLowerCase()
-    const filtrados = q
-      ? productos.filter(p => p.nombre.toLowerCase().includes(q))
-      : productos
+    const filtrados = q ? productos.filter(p => p.nombre.toLowerCase().includes(q)) : productos
 
     if (!filtrados.length) {
-      lista.innerHTML = ''
-      empty.classList.remove('hidden')
-      return
+      lista.innerHTML = ''; empty.classList.remove('hidden'); return
     }
     empty.classList.add('hidden')
 
@@ -257,8 +384,7 @@ export async function renderVendedor(nombre, onLogout) {
       const pLb  = Number(p.precio_lb)
       const pGr  = pLb / LB
       const tipo = getTipo(p)
-
-      let filas = ''
+      let filas  = ''
 
       if (tipo === 'unidad') {
         filas = `
@@ -274,17 +400,17 @@ export async function renderVendedor(nombre, onLogout) {
             <span style="font-size:14px;font-weight:600;color:#1F2937">$${pLb.toFixed(2)}</span>
           </div>`
       } else {
-        const g_por_1dolar  = pGr > 0 ? (1 / pGr) : 0
-        const g_media_libra = LB / 2
-        const precio_media  = pGr * g_media_libra
+        const g1     = pGr > 0 ? (1 / pGr) : 0
+        const gMedia = LB / 2
+        const pMedia = pGr * gMedia
         filas = `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6">
             <span style="font-size:12px;color:#6B7280">$1.00</span>
-            <span style="font-size:13px;font-weight:600;color:#1F2937">${g_por_1dolar.toFixed(1)} g</span>
+            <span style="font-size:13px;font-weight:600;color:#1F2937">${g1.toFixed(1)} g</span>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6">
-            <span style="font-size:12px;color:#6B7280">½ libra (${g_media_libra.toFixed(0)} g)</span>
-            <span style="font-size:13px;font-weight:600;color:#1F2937">$${precio_media.toFixed(2)}</span>
+            <span style="font-size:12px;color:#6B7280">½ libra (${gMedia.toFixed(0)} g)</span>
+            <span style="font-size:13px;font-weight:600;color:#1F2937">$${pMedia.toFixed(2)}</span>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
             <span style="font-size:12px;color:#6B7280">1 libra (${LB.toFixed(0)} g)</span>
@@ -321,9 +447,8 @@ export async function renderVendedor(nombre, onLogout) {
     tbody.innerHTML = hoy.map(v => {
       let cantidadLabel
       if (v.tipo_venta === 'unidad') {
-        cantidadLabel = Number(v.gramos).toFixed(2) + ' und'
+        cantidadLabel = Number(v.gramos).toFixed(0) + ' und'
       } else if (v.tipo_venta === 'mix') {
-        // gramos guarda gramos totales; mostrar cuántos mixes fueron
         const prod      = productos.find(p => p.id === v.producto_id)
         const gramosMix = prod ? getGramosMix(prod) : 182
         const unidades  = gramosMix > 0 ? Math.round(Number(v.gramos) / gramosMix) : 1
@@ -374,41 +499,69 @@ export async function renderVendedor(nombre, onLogout) {
     }
 
     if (val) sel.value = val
-    calcGramos()
+    // Actualizar modo según producto actual
+    const prodActual = val ? productos.find(p => p.id === parseInt(val)) : null
+    actualizarModoEntrada(prodActual)
     renderListaPrecios()
   }
 
   // ── Eventos ───────────────────────────────────────────────────────────────────
-  el.querySelector('#v-producto').addEventListener('change', calcGramos)
-  el.querySelector('#v-monto').addEventListener('input', calcGramos)
 
+  // Cambio de producto
+  el.querySelector('#v-producto').addEventListener('change', () => {
+    const sel = el.querySelector('#v-producto')
+    const opt = sel.options[sel.selectedIndex]
+    const prod = opt && opt.value ? productos.find(p => p.id === parseInt(opt.value)) : null
+    actualizarModoEntrada(prod)
+    recalcular()
+  })
+
+  // Inputs de cálculo
+  el.querySelector('#v-monto').addEventListener('input', recalcular)
+  el.querySelector('#v-gramos').addEventListener('input', recalcular)
+  el.querySelector('#v-cantidad').addEventListener('input', recalcular)
+
+  // Botones +/- de cantidad
+  el.querySelector('#v-cant-menos').addEventListener('click', () => {
+    const inp = el.querySelector('#v-cantidad')
+    inp.value = Math.max(1, (parseInt(inp.value) || 1) - 1)
+    recalcular()
+  })
+  el.querySelector('#v-cant-mas').addEventListener('click', () => {
+    const inp = el.querySelector('#v-cantidad')
+    inp.value = (parseInt(inp.value) || 0) + 1
+    recalcular()
+  })
+
+  // Toggle monto/gramos
+  el.querySelector('#btn-modo-monto').addEventListener('click', () => aplicarModoToggle('monto'))
+  el.querySelector('#btn-modo-gramos').addEventListener('click', () => aplicarModoToggle('gramos'))
+
+  // Buscador precios
   el.querySelector('#v-buscar-precio').addEventListener('input', renderListaPrecios)
 
+  // Exportar CSV
   el.querySelector('#v-exportar-precios').addEventListener('click', () => {
     if (!productos.length) { toast('Sin productos para exportar', true); return }
-
     const rows = ['Producto,Tipo,Detalle,Precio']
-
     productos.forEach(p => {
       const pLb  = Number(p.precio_lb)
       const pGr  = pLb / LB
       const tipo = getTipo(p)
-
       if (tipo === 'unidad') {
         rows.push(`${p.nombre},Por unidad,—,$${pLb.toFixed(2)}`)
       } else if (tipo === 'mix') {
-        const gramosMix = getGramosMix(p)
-        rows.push(`${p.nombre},Mix,Por mix (${gramosMix}g),$${pLb.toFixed(2)}`)
+        const g = getGramosMix(p)
+        rows.push(`${p.nombre},Mix,Por mix (${g}g),$${pLb.toFixed(2)}`)
       } else {
-        const g_por_1dolar  = pGr > 0 ? (1 / pGr) : 0
-        const g_media_libra = LB / 2
-        const precio_media  = pGr * g_media_libra
-        rows.push(`${p.nombre},Granel,$1.00,${g_por_1dolar.toFixed(1)} g`)
-        rows.push(`${p.nombre},Granel,½ libra (${g_media_libra.toFixed(0)} g),$${precio_media.toFixed(2)}`)
+        const g1     = pGr > 0 ? (1 / pGr) : 0
+        const gMedia = LB / 2
+        const pMedia = pGr * gMedia
+        rows.push(`${p.nombre},Granel,$1.00,${g1.toFixed(1)} g`)
+        rows.push(`${p.nombre},Granel,½ libra (${gMedia.toFixed(0)} g),$${pMedia.toFixed(2)}`)
         rows.push(`${p.nombre},Granel,1 libra (${LB.toFixed(0)} g),$${pLb.toFixed(2)}`)
       }
     })
-
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -417,66 +570,91 @@ export async function renderVendedor(nombre, onLogout) {
     toast('Exportando lista de precios...')
   })
 
+  // Limpiar
   el.querySelector('#v-limpiar').addEventListener('click', () => {
     el.querySelector('#v-producto').value = ''
-    el.querySelector('#v-monto').value = ''
-    calcGramos()
+    el.querySelector('#v-monto').value    = ''
+    el.querySelector('#v-gramos').value   = ''
+    el.querySelector('#v-cantidad').value = '1'
+    actualizarModoEntrada(null)
+    recalcular()
   })
 
+  // Registrar venta
   el.querySelector('#v-registrar').addEventListener('click', async () => {
     const sel   = el.querySelector('#v-producto')
     const opt   = sel.options[sel.selectedIndex]
-    const monto = parseFloat(el.querySelector('#v-monto').value)
     const turno = el.querySelector('#v-turno').value
 
     if (!opt || !opt.value) { toast('Selecciona un producto', true); return }
-    if (isNaN(monto) || monto <= 0) { toast('Ingresa un monto válido', true); return }
 
-    const prod   = productos.find(p => p.id === parseInt(opt.value))
+    const prod = productos.find(p => p.id === parseInt(opt.value))
     if (!prod) return
-    const result = calcResultado(prod, monto)
-    const tipo   = getTipo(prod)
-    const pLb    = Number(prod.precio_lb)
-    const cLb    = Number(prod.costo_lb)
-    const pGr    = pLb / LB
-    const cGr    = cLb / LB
 
-    // Para mix: guardar gramos totales reales en la columna gramos
-    // Para granel/unidad: guardar la cantidad calculada normalmente
-    const gramosVenta = tipo === 'mix'
-      ? result.gramos_total          // unidades × gramos por mix
-      : result.cantidad              // gramos (granel) o unidades
+    const tipo = getTipo(prod)
+    const pLb  = Number(prod.precio_lb)
+    const cLb  = Number(prod.costo_lb)
+    const pGr  = pLb / LB
+    const cGr  = cLb / LB
 
-    const utilidadVenta = tipo === 'unidad'
-      ? (pLb - cLb) * result.cantidad
-      : tipo === 'mix'
-        ? (pLb - cLb) * result.cantidad   // utilidad por porción × unidades
-        : (pGr - cGr) * result.cantidad
+    let monto, gramos, utilidad
 
-    if (tipo === 'mix' && result.cantidad === 0) {
-      toast('El monto no alcanza para ningún mix ($' + pLb.toFixed(2) + ' por mix)', true)
-      return
+    if (tipo === 'unidad') {
+      const cant = parseInt(el.querySelector('#v-cantidad').value) || 0
+      if (cant <= 0) { toast('Ingresa una cantidad válida', true); return }
+      monto    = pLb * cant
+      gramos   = cant              // guardamos unidades en el campo gramos
+      utilidad = (pLb - cLb) * cant
+
+    } else if (tipo === 'mix') {
+      monto = parseFloat(el.querySelector('#v-monto').value)
+      if (isNaN(monto) || monto <= 0) { toast('Ingresa un monto válido', true); return }
+      const pPorcion = pLb
+      const unidades = pPorcion > 0 ? Math.floor(monto / pPorcion) : 0
+      if (unidades === 0) { toast(`El monto no alcanza para ningún mix ($${pLb.toFixed(2)})`, true); return }
+      gramos   = unidades * getGramosMix(prod)
+      utilidad = (pLb - cLb) * unidades
+
+    } else {
+      // Granel
+      if (modoEntrada === 'gramos') {
+        gramos = parseFloat(el.querySelector('#v-gramos').value)
+        if (isNaN(gramos) || gramos <= 0) { toast('Ingresa los gramos a vender', true); return }
+        monto    = pGr * gramos
+        utilidad = cGr > 0 ? (pGr - cGr) * gramos : 0
+      } else {
+        monto = parseFloat(el.querySelector('#v-monto').value)
+        if (isNaN(monto) || monto <= 0) { toast('Ingresa un monto válido', true); return }
+        gramos   = pGr > 0 ? monto / pGr : 0
+        utilidad = cGr > 0 ? (pGr - cGr) * gramos : 0
+      }
     }
 
     const btn = el.querySelector('#v-registrar')
     btn.disabled = true; btn.textContent = 'Guardando...'
     try {
       const nueva = await insertVenta({
-        fecha: today, vendedor: nombre, turno,
+        fecha:           today,
+        vendedor:        nombre,
+        turno,
         producto_id:     prod.id,
         producto_nombre: prod.nombre,
         monto,
-        precio_gr: tipo === 'unidad' ? pLb : pGr,
-        costo_gr:  tipo === 'unidad' ? cLb : cGr,
-        gramos:    gramosVenta,
-        utilidad:  utilidadVenta,
-        margen:    pLb > 0 ? (pLb - cLb) / pLb : 0,
-        tipo_venta: tipo
+        precio_gr:       tipo === 'unidad' ? pLb : pGr,
+        costo_gr:        tipo === 'unidad' ? cLb : cGr,
+        gramos,
+        utilidad,
+        margen:          pLb > 0 ? (pLb - cLb) / pLb : 0,
+        tipo_venta:      tipo
       })
       ventas.unshift(nueva)
       el.querySelector('#v-producto').value = ''
-      el.querySelector('#v-monto').value = ''
-      calcGramos(); renderTabla()
+      el.querySelector('#v-monto').value    = ''
+      el.querySelector('#v-gramos').value   = ''
+      el.querySelector('#v-cantidad').value = '1'
+      actualizarModoEntrada(null)
+      recalcular()
+      renderTabla()
       toast('Venta registrada ✓')
     } catch(e) {
       toast('Error al guardar. Revisa tu conexión.', true)
